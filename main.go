@@ -140,14 +140,41 @@ func (m Model) View() string {
 	sb.WriteString(fmt.Sprintf("Mutation Rate: %.2f\n", m.MutationRate))
 	sb.WriteString(fmt.Sprintf("Population Size: %d\n", m.PopulationSize))
 
-	// Display additional statistics
-	bestFitness := calculateBestFitness(m.Population)
-	averageFitness := calculateAverageFitness(m.Population)
+	// Print fitness statistics
+	sb.WriteString(printFitnessStatistics(m.Population))
+
+	// Display ASCII art representation of the fittest creature
+	fittestCreature := findFittestCreature(m.Population)
+	sb.WriteString(fmt.Sprintf("\nFittest Creature:\n%s\n", asciiArtRepresentation(fittestCreature)))
+
+	return sb.String()
+}
+
+// printFitnessStatistics prints fitness statistics of the population
+func printFitnessStatistics(pop Population) string {
+	var sb strings.Builder
+
+	bestFitness := calculateBestFitness(pop)
+	averageFitness := calculateAverageFitness(pop)
 	sb.WriteString(fmt.Sprintf("Best Fitness: %d\n", bestFitness))
 	sb.WriteString(fmt.Sprintf("Average Fitness: %.2f\n", averageFitness))
 	// Add more statistics as needed
 
 	return sb.String()
+}
+
+// findFittestCreature finds the fittest creature in the population
+func findFittestCreature(pop Population) Creature {
+	var fittestCreature Creature
+	maxFitness := 0
+	for _, creature := range pop.Creatures {
+		fitness := calculateFitness(creature)
+		if fitness > maxFitness {
+			maxFitness = fitness
+			fittestCreature = creature
+		}
+	}
+	return fittestCreature
 }
 
 // calculateBestFitness calculates the best fitness score in the population
@@ -184,6 +211,20 @@ func calculateFitness(creature Creature) int {
 	return fitness
 }
 
+// asciiArtRepresentation generates ASCII art representation of the creature
+func asciiArtRepresentation(creature Creature) string {
+	var sb strings.Builder
+	for _, gene := range creature.Genes {
+		if gene == 0 {
+			sb.WriteString("o")
+		} else {
+			sb.WriteString("X")
+		}
+	}
+	sb.WriteString("\n")
+	return sb.String()
+}
+
 // Main entry point
 func main() {
 	// Seed random number generator
@@ -191,8 +232,8 @@ func main() {
 
 	// Initialize the Model with default parameters
 	initialModel := Model{
-		PopulationSize: 10, // Default population size
-		MutationRate:   0.01,
+		PopulationSize: 21, // Default population size
+		MutationRate:   21.12,
 	}
 
 	// Start the program

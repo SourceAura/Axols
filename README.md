@@ -1,36 +1,40 @@
 # Evo-Sim
 
-Evo-Sim is a simple particle simulation implemented in Go using the Pixel game development library. It simulates the movement and interaction of particles within a window, allowing for experimentation with various parameters to observe emergent behavior.
+Evo-Sim is a simple particle life simulation with evolutionary algorithms implemented in Go using the Pixel game library.
+
+## Overview
+
+Evo-Sim simulates the life of particles in a 2D environment. Each particle has its own set of properties such as position, velocity, radius, and genetic makeup. The simulation includes features like particle movement, pheromone trails, and evolutionary algorithms for trait selection.
 
 ## Features
 
-- Particle movement: Particles move around the screen, bouncing off the edges.
-- Particle attributes: Each particle has a position, velocity, radius, center color, and outline color.
-- Real-time visualization: The simulation is displayed in a window, allowing for real-time observation.
-- Debugging/logging: Detailed information about each particle, including position, velocity, and color, is printed to the console in real-time.
+- Particle life simulation
+- Random generation of particle properties
+- Particle movement with collision detection
+- Pheromone trails left by particles
+- Evolutionary algorithms for trait selection over time
 
-## How to Run
+## Requirements
 
-1. Install Go if you haven't already. You can download it from the official [Go website](https://golang.org/).
-2. Clone this repository to your local machine.
-3. Navigate to the directory containing the `main.go` file.
-4. Run the following command to build and execute the simulation:
+To run Evo-Sim, you need to have Go installed on your system. You can download and install Go from the [official Go website](https://golang.org/).
 
+## Installation
 
-5. The simulation window will open, and you can observe the behavior of the particles.
+Clone the Evo-Sim repository:
 
-## Controls
+```bash
+git clone https://github.com/sourceaura/evo-sim.git
 
-- Close the simulation window to exit the program.
+evo-sim/
+├── README.md
+├── main.go
+└── frontend/
+    └── main.go
 
-## Dependencies
+Navigate to the project directory:
 
-- Pixel: A 2D game library for Go. It is used for rendering the simulation window and handling graphics.
+cd evo-sim 
 
-## Contributing
+Run the simulation:
 
-Contributions are welcome! If you have any ideas for improvements or new features, feel free to open an issue or submit a pull request.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+go run main.go

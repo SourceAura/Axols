@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"image/color"
 	"math/rand"
 	"time"
@@ -13,14 +12,17 @@ import (
 )
 
 const (
-	windowWidth  = 1100
-	windowHeight = 800
-
-	numParticles = 500
-	minRadius    = 1
-	maxRadius    = 5
-	centerSize   = 2
-	outlineWidth = 0.5
+	windowWidth        = 900
+	windowHeight       = 700
+	numParticles       = 369
+	minRadius          = 1
+	maxRadius          = 5
+	centerSize         = 2
+	outlineWidth       = 0.5
+	pheromoneSpread    = 2
+	pheromoneIntensity = 1.0  // Initial intensity of the pheromone trail
+	pheromoneDecay     = 0.05 // Rate at which pheromone intensity decreases over time
+	pheromoneAlpha     = 200  // Alpha value for pheromone trail color
 )
 
 // Particle represents a single particle in the simulation
@@ -29,6 +31,12 @@ type Particle struct {
 	vel    pixel.Vec // Velocity
 	radius float64   // Radius
 	gene   color.RGBA
+}
+
+// Pheromone represents a pheromone trail left by particles
+type Pheromone struct {
+	pos       pixel.Vec // Position
+	intensity float64   // Intensity
 }
 
 func run() {
@@ -50,6 +58,9 @@ func run() {
 		particles[i] = NewParticle()
 	}
 
+	// Create pheromone trail
+	pheromoneTrail := make([]Pheromone, 0)
+
 	last := time.Now()
 	for !win.Closed() {
 		dt := time.Since(last).Seconds()
@@ -58,16 +69,21 @@ func run() {
 		win.Clear(color.Black)
 		imd.Clear()
 
+		// Update and draw particles
 		for _, p := range particles {
 			p.Update(dt)
 			p.Draw(imd)
 		}
 
+		// Update and draw pheromone trail
+		updatePheromoneTrail(&pheromoneTrail, dt)
+		drawPheromoneTrail(imd, pheromoneTrail)
+
 		imd.Draw(win)
 		win.Update()
 
-		// Print debugging/logging information
-		logInfo(particles)
+		// Run evolutionary algorithm
+		EvolutionaryAlgorithm(particles)
 	}
 }
 
@@ -107,6 +123,37 @@ func (p *Particle) Draw(imd *imdraw.IMDraw) {
 	imd.Circle(p.radius, outlineWidth)
 }
 
+// Update the pheromone trail, reducing intensity and removing trails with very low intensity
+func updatePheromoneTrail(trail *[]Pheromone, dt float64) {
+	// Update intensity of existing pheromone trails
+	for i := range *trail {
+		(*trail)[i].intensity -= pheromoneDecay * dt
+	}
+	// Remove trails with very low intensity
+	j := 0
+	for _, p := range *trail {
+		if p.intensity > 0 {
+			(*trail)[j] = p
+			j++
+		}
+	}
+	*trail = (*trail)[:j]
+}
+
+// Draw the pheromone trail with a fading effect
+func drawPheromoneTrail(imd *imdraw.IMDraw, trail []Pheromone) {
+	for _, p := range trail {
+		// Calculate color based on intensity
+		alpha := uint8(p.intensity * pheromoneAlpha)
+		c := color.RGBA{R: 255, G: 255, B: 255, A: alpha}
+		imd.Color = c
+
+		// Draw pheromone trail as circles with decreasing intensity
+		imd.Push(p.pos)
+		imd.Circle(pheromoneSpread, 0)
+	}
+}
+
 // randomColor generates a random color
 func randomColor() color.RGBA {
 	return color.RGBA{
@@ -117,14 +164,21 @@ func randomColor() color.RGBA {
 	}
 }
 
-// logInfo prints debugging/logging information
-func logInfo(particles []*Particle) {
-	// Clear the console
-	print("\033[H\033[2J")
+// EvolutionaryAlgorithm simulates trait selection over time
+func EvolutionaryAlgorithm(particles []*Particle) {
+	selected := selection(particles)
+	crossover(selected)
+}
 
-	// Print the number of particles
-	fmt.Println("Number of particles:", len(particles))
-	// Add more debugging/logging information as needed
+// selection selects particles based on some criteria
+func selection(particles []*Particle) []*Particle {
+	// Add your selection logic here
+	return particles
+}
+
+// crossover performs crossover operation on selected particles
+func crossover(selected []*Particle) {
+	// Add your crossover logic here
 }
 
 func main() {

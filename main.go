@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
+	"math"
 	"math/rand"
 	"time"
 
@@ -17,20 +19,34 @@ const (
 	numParticles       = 369
 	minRadius          = 1
 	maxRadius          = 5
-	centerSize         = 2
 	outlineWidth       = 0.5
 	pheromoneSpread    = 2
 	pheromoneIntensity = 1.0  // Initial intensity of the pheromone trail
 	pheromoneDecay     = 0.05 // Rate at which pheromone intensity decreases over time
 	pheromoneAlpha     = 200  // Alpha value for pheromone trail color
+	initialSpeedFactor = 0.5  // Factor to slow down initial movement speed
+	nucleusRadius      = 0.3  // Radius of the nucleus
+	mutationRate       = 0.1  // Rate of mutation
+)
+
+// Biome represents a separate environment within the simulation
+type Biome int
+
+const (
+	Overworld Biome = iota
+	BubbleBiome1
+	BubbleBiome2
+	BubbleBiome3
 )
 
 // Particle represents a single particle in the simulation
 type Particle struct {
-	pos    pixel.Vec // Position
-	vel    pixel.Vec // Velocity
-	radius float64   // Radius
-	gene   color.RGBA
+	pos        pixel.Vec // Position
+	vel        pixel.Vec // Velocity
+	radius     float64   // Radius
+	gene       color.RGBA
+	nucleusPos pixel.Vec // Position of the nucleus
+	biome      Biome     // Biome the particle belongs to
 }
 
 // Pheromone represents a pheromone trail left by particles
@@ -41,7 +57,7 @@ type Pheromone struct {
 
 func run() {
 	cfg := pixelgl.WindowConfig{
-		Title:  "Particle Life Simulation",
+		Title:  "Evo-Sim",
 		Bounds: pixel.R(0, 0, windowWidth, windowHeight),
 		VSync:  true,
 	}
@@ -61,6 +77,7 @@ func run() {
 	// Create pheromone trail
 	pheromoneTrail := make([]Pheromone, 0)
 
+	generation := 0
 	last := time.Now()
 	for !win.Closed() {
 		dt := time.Since(last).Seconds()
@@ -82,19 +99,35 @@ func run() {
 		imd.Draw(win)
 		win.Update()
 
-		// Run evolutionary algorithm
-		EvolutionaryAlgorithm(particles)
+		// Call debugDisplay function with relevant data
+		debugDisplay(particles, pheromoneTrail, generation)
+
+		// Apply genetic algorithm
+		particles = evolvePopulation(particles)
+
+		generation++
 	}
 }
 
 // NewParticle creates a new particle with random properties
 func NewParticle() *Particle {
-	return &Particle{
-		pos:    pixel.V(rand.Float64()*windowWidth, rand.Float64()*windowHeight),
-		vel:    pixel.V(rand.Float64()*100-50, rand.Float64()*100-50),
-		radius: rand.Float64()*(maxRadius-minRadius) + minRadius,
-		gene:   randomColor(),
+	p := &Particle{
+		pos:        pixel.V(rand.Float64()*windowWidth, rand.Float64()*windowHeight),
+		radius:     rand.Float64()*(maxRadius-minRadius) + minRadius,
+		gene:       randomColor(),
+		nucleusPos: pixel.V(0, 0),
 	}
+
+	// Set initial velocity (slowed by half)
+	p.vel = pixel.V(rand.Float64()*100-50, rand.Float64()*100-50).Scaled(initialSpeedFactor)
+
+	// Set nucleus position relative to the particle
+	p.nucleusPos = p.pos.Add(pixel.V(-p.radius/2, p.radius/2))
+
+	// Assign a random biome
+	p.biome = Biome(rand.Intn(4))
+
+	return p
 }
 
 // Update updates the position of the particle
@@ -106,21 +139,58 @@ func (p *Particle) Update(dt float64) {
 	if p.pos.Y < 0 || p.pos.Y > windowHeight {
 		p.vel.Y = -p.vel.Y
 	}
+
+	// Update nucleus position
+	p.nucleusPos = p.pos.Add(pixel.V(-p.radius/2, p.radius/2))
 }
 
 // Draw draws the particle
 func (p *Particle) Draw(imd *imdraw.IMDraw) {
 	imd.Color = p.gene
 
-	// Draw the center
-	imd.Push(p.pos)
-	imd.Circle(centerSize, 0) // smaller center
-	imd.Polygon(0)            // Start a new polygon
-
-	// Draw the outline
-	imd.Color = colornames.White
+	// Draw the body
 	imd.Push(p.pos)
 	imd.Circle(p.radius, outlineWidth)
+
+	// Draw the tail
+	tailLength := p.radius * 2
+	tailAngle := p.vel.Angle() - math.Pi
+	tailStart := pixel.V(
+		p.pos.X-tailLength*math.Cos(tailAngle),
+		p.pos.Y-tailLength*math.Sin(tailAngle),
+	)
+	imd.Push(tailStart)
+	imd.Push(p.pos)
+	imd.Line(outlineWidth)
+
+	// Draw the head
+	headSize := p.radius * 1.5
+	headPos := pixel.V(
+		p.pos.X+headSize*math.Cos(tailAngle),
+		p.pos.Y+headSize*math.Sin(tailAngle),
+	)
+	imd.Push(headPos)
+	imd.Circle(headSize, outlineWidth)
+
+	// Draw the eyes
+	eyeSize := p.radius * 0.2
+	leftEyePos := pixel.V(
+		headPos.X+headSize/2*math.Cos(tailAngle-math.Pi/4),
+		headPos.Y+headSize/2*math.Sin(tailAngle-math.Pi/4),
+	)
+	rightEyePos := pixel.V(
+		headPos.X+headSize/2*math.Cos(tailAngle+math.Pi/4),
+		headPos.Y+headSize/2*math.Sin(tailAngle+math.Pi/4),
+	)
+	imd.Push(leftEyePos)
+	imd.Circle(eyeSize, outlineWidth)
+	imd.Push(rightEyePos)
+	imd.Circle(eyeSize, outlineWidth)
+
+	// Draw the nucleus
+	imd.Color = colornames.White
+	imd.Push(p.nucleusPos)
+	imd.Circle(nucleusRadius, 0)
 }
 
 // Update the pheromone trail, reducing intensity and removing trails with very low intensity
@@ -164,21 +234,24 @@ func randomColor() color.RGBA {
 	}
 }
 
-// EvolutionaryAlgorithm simulates trait selection over time
-func EvolutionaryAlgorithm(particles []*Particle) {
-	selected := selection(particles)
-	crossover(selected)
+// debugDisplay displays debugging information
+func debugDisplay(particles []*Particle, pheromoneTrail []Pheromone, generation int) {
+	// Clear the console
+	fmt.Print("\033[H\033[2J")
+
+	// Print debugging information
+	fmt.Println("Generation:", generation)
+	fmt.Println("Number of particles:", len(particles))
+	fmt.Println("Number of pheromone trails:", len(pheromoneTrail))
+	// Add more relevant debugging information here
 }
 
-// selection selects particles based on some criteria
-func selection(particles []*Particle) []*Particle {
-	// Add your selection logic here
+// evolvePopulation applies genetic algorithms to evolve the population
+func evolvePopulation(particles []*Particle) []*Particle {
+	// Perform crossover and mutation
+	// (Not implemented here; can be added based on specific requirements)
+
 	return particles
-}
-
-// crossover performs crossover operation on selected particles
-func crossover(selected []*Particle) {
-	// Add your crossover logic here
 }
 
 func main() {

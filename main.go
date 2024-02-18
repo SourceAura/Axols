@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"image/color"
-	"math"
 	"math/rand"
 	"time"
 
@@ -27,6 +26,10 @@ const (
 	initialSpeedFactor = 0.5  // Factor to slow down initial movement speed
 	nucleusRadius      = 0.3  // Radius of the nucleus
 	mutationRate       = 0.1  // Rate of mutation
+	foodSpawnRate      = 0.01 // Probability of food spawning per frame
+	consumeRadius      = 10   // Radius within which a particle can consume food
+	nutritionPerFood   = 1    // Amount of nutrition gained per unit of food
+	evolutionSpeedup   = 0.1  // Speedup factor for evolution due to consuming food
 )
 
 // Biome represents a separate environment within the simulation
@@ -41,18 +44,23 @@ const (
 
 // Particle represents a single particle in the simulation
 type Particle struct {
-	pos        pixel.Vec // Position
-	vel        pixel.Vec // Velocity
-	radius     float64   // Radius
-	gene       color.RGBA
-	nucleusPos pixel.Vec // Position of the nucleus
-	biome      Biome     // Biome the particle belongs to
+	pos           pixel.Vec // Position
+	vel           pixel.Vec // Velocity
+	radius        float64   // Radius
+	gene          color.RGBA
+	nucleusPos    pixel.Vec // Position of the nucleus
+	biome         Biome     // Biome the particle belongs to
+	consumedFood  int       // Counter for consumed food
+	timeSinceLast float64   // Time since last food consumption
 }
 
-// Pheromone represents a pheromone trail left by particles
-type Pheromone struct {
+// Food represents a source of nutrition for particles
+type Food struct {
 	pos       pixel.Vec // Position
-	intensity float64   // Intensity
+	radius    float64   // Radius
+	color     color.RGBA
+	biome     Biome   // Biome the food belongs to
+	nutrition float64 // Nutrition value of the food
 }
 
 func run() {
@@ -74,8 +82,8 @@ func run() {
 		particles[i] = NewParticle()
 	}
 
-	// Create pheromone trail
-	pheromoneTrail := make([]Pheromone, 0)
+	// Create food sources
+	foods := make([]Food, 0)
 
 	generation := 0
 	last := time.Now()
@@ -83,27 +91,27 @@ func run() {
 		dt := time.Since(last).Seconds()
 		last = time.Now()
 
-		win.Clear(color.Black)
+		win.Clear(colornames.White)
 		imd.Clear()
 
 		// Update and draw particles
 		for _, p := range particles {
-			p.Update(dt)
+			p.Update(dt, foods)
 			p.Draw(imd)
 		}
 
-		// Update and draw pheromone trail
-		updatePheromoneTrail(&pheromoneTrail, dt)
-		drawPheromoneTrail(imd, pheromoneTrail)
+		// Update and draw food sources
+		updateFoodSources(&foods, dt)
+		drawFoodSources(imd, foods)
 
 		imd.Draw(win)
 		win.Update()
 
 		// Call debugDisplay function with relevant data
-		debugDisplay(particles, pheromoneTrail, generation)
+		debugDisplay(particles, foods, generation)
 
 		// Apply genetic algorithm
-		particles = evolvePopulation(particles)
+		particles = evolvePopulation(particles, foods)
 
 		generation++
 	}
@@ -112,10 +120,12 @@ func run() {
 // NewParticle creates a new particle with random properties
 func NewParticle() *Particle {
 	p := &Particle{
-		pos:        pixel.V(rand.Float64()*windowWidth, rand.Float64()*windowHeight),
-		radius:     rand.Float64()*(maxRadius-minRadius) + minRadius,
-		gene:       randomColor(),
-		nucleusPos: pixel.V(0, 0),
+		pos:           pixel.V(rand.Float64()*windowWidth, rand.Float64()*windowHeight),
+		radius:        rand.Float64()*(maxRadius-minRadius) + minRadius,
+		gene:          randomColor(),
+		nucleusPos:    pixel.V(0, 0),
+		consumedFood:  0,
+		timeSinceLast: 0,
 	}
 
 	// Set initial velocity (slowed by half)
@@ -131,7 +141,7 @@ func NewParticle() *Particle {
 }
 
 // Update updates the position of the particle
-func (p *Particle) Update(dt float64) {
+func (p *Particle) Update(dt float64, foods []Food) {
 	p.pos = p.pos.Add(p.vel.Scaled(dt))
 	if p.pos.X < 0 || p.pos.X > windowWidth {
 		p.vel.X = -p.vel.X
@@ -142,86 +152,100 @@ func (p *Particle) Update(dt float64) {
 
 	// Update nucleus position
 	p.nucleusPos = p.pos.Add(pixel.V(-p.radius/2, p.radius/2))
+
+	// Consume food if within range
+	for _, food := range foods {
+		if p.pos.To(food.pos).Len() <= consumeRadius {
+			p.consumeFood(food)
+			break
+		}
+	}
+
+	// Update time since last food consumption
+	p.timeSinceLast += dt
 }
 
 // Draw draws the particle
 func (p *Particle) Draw(imd *imdraw.IMDraw) {
 	imd.Color = p.gene
 
-	// Draw the body
+	// Draw the main body
 	imd.Push(p.pos)
-	imd.Circle(p.radius, outlineWidth)
-
-	// Draw the tail
-	tailLength := p.radius * 2
-	tailAngle := p.vel.Angle() - math.Pi
-	tailStart := pixel.V(
-		p.pos.X-tailLength*math.Cos(tailAngle),
-		p.pos.Y-tailLength*math.Sin(tailAngle),
-	)
-	imd.Push(tailStart)
-	imd.Push(p.pos)
-	imd.Line(outlineWidth)
-
-	// Draw the head
-	headSize := p.radius * 1.5
-	headPos := pixel.V(
-		p.pos.X+headSize*math.Cos(tailAngle),
-		p.pos.Y+headSize*math.Sin(tailAngle),
-	)
-	imd.Push(headPos)
-	imd.Circle(headSize, outlineWidth)
-
-	// Draw the eyes
-	eyeSize := p.radius * 0.2
-	leftEyePos := pixel.V(
-		headPos.X+headSize/2*math.Cos(tailAngle-math.Pi/4),
-		headPos.Y+headSize/2*math.Sin(tailAngle-math.Pi/4),
-	)
-	rightEyePos := pixel.V(
-		headPos.X+headSize/2*math.Cos(tailAngle+math.Pi/4),
-		headPos.Y+headSize/2*math.Sin(tailAngle+math.Pi/4),
-	)
-	imd.Push(leftEyePos)
-	imd.Circle(eyeSize, outlineWidth)
-	imd.Push(rightEyePos)
-	imd.Circle(eyeSize, outlineWidth)
+	imd.Circle(p.radius, 0)
 
 	// Draw the nucleus
-	imd.Color = colornames.White
+	imd.Color = colornames.Yellow
 	imd.Push(p.nucleusPos)
 	imd.Circle(nucleusRadius, 0)
 }
 
-// Update the pheromone trail, reducing intensity and removing trails with very low intensity
-func updatePheromoneTrail(trail *[]Pheromone, dt float64) {
-	// Update intensity of existing pheromone trails
-	for i := range *trail {
-		(*trail)[i].intensity -= pheromoneDecay * dt
+// Update the food sources, generating new ones over time
+func updateFoodSources(foods *[]Food, dt float64) {
+	// Generate new food sources with a certain probability
+	if rand.Float64() < foodSpawnRate {
+		*foods = append(*foods, NewFood())
 	}
-	// Remove trails with very low intensity
-	j := 0
-	for _, p := range *trail {
-		if p.intensity > 0 {
-			(*trail)[j] = p
-			j++
-		}
-	}
-	*trail = (*trail)[:j]
+
+	// Update existing food sources (not implemented here)
 }
 
-// Draw the pheromone trail with a fading effect
-func drawPheromoneTrail(imd *imdraw.IMDraw, trail []Pheromone) {
-	for _, p := range trail {
-		// Calculate color based on intensity
-		alpha := uint8(p.intensity * pheromoneAlpha)
-		c := color.RGBA{R: 255, G: 255, B: 255, A: alpha}
-		imd.Color = c
-
-		// Draw pheromone trail as circles with decreasing intensity
-		imd.Push(p.pos)
-		imd.Circle(pheromoneSpread, 0)
+// Draw the food sources
+func drawFoodSources(imd *imdraw.IMDraw, foods []Food) {
+	for _, f := range foods {
+		imd.Color = f.color
+		imd.Push(f.pos)
+		imd.Circle(f.radius, 0)
 	}
+}
+
+// NewFood creates a new food source with random properties
+func NewFood() Food {
+	pos := pixel.V(rand.Float64()*windowWidth, rand.Float64()*windowHeight)
+	radius := rand.Float64()*5 + 3
+	color := randomColor()
+	nutrition := rand.Float64() * 10
+
+	// Assign a random biome
+	biome := Biome(rand.Intn(4))
+
+	return Food{pos, radius, color, biome, nutrition}
+}
+
+// debugDisplay displays debugging information
+func debugDisplay(particles []*Particle, foods []Food, generation int) {
+	// Clear the console
+	fmt.Print("\033[H\033[2J")
+
+	// Print debugging information
+	fmt.Println("Generation:", generation)
+	fmt.Println("Number of particles:", len(particles))
+	fmt.Println("Number of food sources:", len(foods))
+	// Add more relevant debugging information here
+}
+
+// evolvePopulation applies genetic algorithms to evolve the population
+func evolvePopulation(particles []*Particle, foods []Food) []*Particle {
+	for _, p := range particles {
+		// Speed up evolution based on food consumption
+		if p.consumedFood > 0 {
+			for i := 0; i < p.consumedFood; i++ {
+				p.mutate()
+			}
+		}
+	}
+
+	return particles
+}
+
+// consumeFood consumes a food source and increases nutrition
+func (p *Particle) consumeFood(food Food) {
+	p.consumedFood++
+	p.timeSinceLast = 0
+}
+
+// mutate applies mutation to the particle's traits
+func (p *Particle) mutate() {
+	// Mutation can be implemented here based on specific requirements
 }
 
 // randomColor generates a random color
@@ -232,26 +256,6 @@ func randomColor() color.RGBA {
 		B: uint8(rand.Intn(256)),
 		A: 150, // Less transparency
 	}
-}
-
-// debugDisplay displays debugging information
-func debugDisplay(particles []*Particle, pheromoneTrail []Pheromone, generation int) {
-	// Clear the console
-	fmt.Print("\033[H\033[2J")
-
-	// Print debugging information
-	fmt.Println("Generation:", generation)
-	fmt.Println("Number of particles:", len(particles))
-	fmt.Println("Number of pheromone trails:", len(pheromoneTrail))
-	// Add more relevant debugging information here
-}
-
-// evolvePopulation applies genetic algorithms to evolve the population
-func evolvePopulation(particles []*Particle) []*Particle {
-	// Perform crossover and mutation
-	// (Not implemented here; can be added based on specific requirements)
-
-	return particles
 }
 
 func main() {

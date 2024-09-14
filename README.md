@@ -1,40 +1,23 @@
-# Evo-Sim
+# Axols - An Evolution Simulation
 
-Evo-Sim is a simple particle life simulation with evolutionary algorithms implemented in Go using the Pixel game library.
+Axols is an evolution simulation implemented in Go using the Pixel game library. It simulates the life and evolution of particle-like creatures called "axols" in a 2D environment.
 
 ## Overview
 
-Evo-Sim simulates the life of particles in a 2D environment. Each particle has its own set of properties such as position, velocity, radius, and genetic makeup. The simulation includes features like particle movement, pheromone trails, and evolutionary algorithms for trait selection.
+Axols simulates the life of small creatures in a 2D environment. Each axol has its own set of properties such as position, velocity, size, speed, and genetic makeup. The simulation includes features like creature movement, food sources, and evolutionary algorithms for trait selection.
 
 ## Features
 
-- Particle life simulation
-- Random generation of particle properties
-- Particle movement with collision detection
-- Pheromone trails left by particles
+- Axol life simulation with two distinct species
+- Random generation of axol properties
+- Axol movement with boundary collision detection
+- Food sources that axols can consume
 - Evolutionary algorithms for trait selection over time
+- Multiple biomes (currently not fully implemented)
+- Visualization of axols with bodies, nuclei, and wiggling tails
 
 ## Requirements
 
-To run Evo-Sim, you need to have Go installed on your system. You can download and install Go from the [official Go website](https://golang.org/).
+To run Axols, you need to have Go installed on your system. You can download and install Go from the [official Go website](https://golang.org/).
 
-## Installation
-
-Clone the Evo-Sim repository:
-
-```bash
-git clone https://github.com/sourceaura/evo-sim.git
-
-evo-sim/
-├── README.md
-├── main.go
-└── frontend/
-    └── main.go
-
-Navigate to the project directory:
-
-cd evo-sim 
-
-Run the simulation:
-
-go run main.go
+You'll also need to install the Pixel game library and its dependencies. You can do this by running:

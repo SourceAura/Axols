@@ -3,19 +3,19 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"math/rand"
 	"time"
 
 	"github.com/faiface/pixel"
 	"github.com/faiface/pixel/imdraw"
 	"github.com/faiface/pixel/pixelgl"
-	"golang.org/x/image/colornames"
 )
 
 const (
 	windowWidth        = 900
 	windowHeight       = 700
-	numParticles       = 369
+	numAxols           = 100 // Reduced number for clarity
 	minRadius          = 1
 	maxRadius          = 5
 	outlineWidth       = 0.5
@@ -42,16 +42,22 @@ const (
 	BubbleBiome3
 )
 
-// Particle represents a single particle in the simulation
-type Particle struct {
-	pos           pixel.Vec // Position
-	vel           pixel.Vec // Velocity
-	radius        float64   // Radius
-	gene          color.RGBA
-	nucleusPos    pixel.Vec // Position of the nucleus
-	biome         Biome     // Biome the particle belongs to
-	consumedFood  int       // Counter for consumed food
-	timeSinceLast float64   // Time since last food consumption
+// Axol represents a single particle in the simulation
+type Axol struct {
+	pos           pixel.Vec
+	vel           pixel.Vec
+	genome        Genome
+	species       int
+	tailAngle     float64
+	consumedFood  int     // Add this field
+	timeSinceLast float64 // Add this field
+}
+
+type Genome struct {
+	size        float64
+	speed       float64
+	senseRadius float64
+	color       color.RGBA
 }
 
 // Food represents a source of nutrition for particles
@@ -65,7 +71,7 @@ type Food struct {
 
 func run() {
 	cfg := pixelgl.WindowConfig{
-		Title:  "Evo-Sim",
+		Title:  "Axol Simulation",
 		Bounds: pixel.R(0, 0, windowWidth, windowHeight),
 		VSync:  true,
 	}
@@ -76,28 +82,30 @@ func run() {
 
 	imd := imdraw.New(nil)
 
-	// Create particles
-	particles := make([]*Particle, numParticles)
-	for i := range particles {
-		particles[i] = NewParticle()
+	// Create axols of two species
+	axols := make([]*Axol, numAxols)
+	for i := range axols {
+		species := i % 2 // Alternates between 0 and 1
+		axols[i] = NewAxol(species)
 	}
 
 	// Create food sources
 	foods := make([]Food, 0)
 
-	generation := 0
+	deepPurple := color.RGBA{R: 20, G: 0, B: 30, A: 255}
+
 	last := time.Now()
 	for !win.Closed() {
 		dt := time.Since(last).Seconds()
 		last = time.Now()
 
-		win.Clear(colornames.White)
+		win.Clear(deepPurple)
 		imd.Clear()
 
-		// Update and draw particles
-		for _, p := range particles {
-			p.Update(dt, foods)
-			p.Draw(imd)
+		// Update and draw axols
+		for _, a := range axols {
+			a.Update(dt, foods)
+			a.Draw(imd)
 		}
 
 		// Update and draw food sources
@@ -106,77 +114,93 @@ func run() {
 
 		imd.Draw(win)
 		win.Update()
-
-		// Call debugDisplay function with relevant data
-		debugDisplay(particles, foods, generation)
-
-		// Apply genetic algorithm
-		particles = evolvePopulation(particles, foods)
-
-		generation++
 	}
 }
 
-// NewParticle creates a new particle with random properties
-func NewParticle() *Particle {
-	p := &Particle{
-		pos:           pixel.V(rand.Float64()*windowWidth, rand.Float64()*windowHeight),
-		radius:        rand.Float64()*(maxRadius-minRadius) + minRadius,
-		gene:          randomColor(),
-		nucleusPos:    pixel.V(0, 0),
-		consumedFood:  0,
-		timeSinceLast: 0,
-	}
-
-	// Set initial velocity (slowed by half)
-	p.vel = pixel.V(rand.Float64()*100-50, rand.Float64()*100-50).Scaled(initialSpeedFactor)
-
-	// Set nucleus position relative to the particle
-	p.nucleusPos = p.pos.Add(pixel.V(-p.radius/2, p.radius/2))
-
-	// Assign a random biome
-	p.biome = Biome(rand.Intn(4))
-
-	return p
-}
-
-// Update updates the position of the particle
-func (p *Particle) Update(dt float64, foods []Food) {
-	p.pos = p.pos.Add(p.vel.Scaled(dt))
-	if p.pos.X < 0 || p.pos.X > windowWidth {
-		p.vel.X = -p.vel.X
-	}
-	if p.pos.Y < 0 || p.pos.Y > windowHeight {
-		p.vel.Y = -p.vel.Y
-	}
-
-	// Update nucleus position
-	p.nucleusPos = p.pos.Add(pixel.V(-p.radius/2, p.radius/2))
-
-	// Consume food if within range
-	for _, food := range foods {
-		if p.pos.To(food.pos).Len() <= consumeRadius {
-			p.consumeFood(food)
-			break
+// NewAxol creates a new axol with random properties
+func NewAxol(species int) *Axol {
+	var genome Genome
+	if species == 0 {
+		genome = Genome{
+			size:        5,
+			speed:       50,
+			senseRadius: 30,
+			color:       color.RGBA{R: 100, G: 200, B: 255, A: 150},
+		}
+	} else {
+		genome = Genome{
+			size:        7,
+			speed:       40,
+			senseRadius: 40,
+			color:       color.RGBA{R: 255, G: 100, B: 200, A: 150},
 		}
 	}
 
-	// Update time since last food consumption
-	p.timeSinceLast += dt
+	return &Axol{
+		pos:           pixel.V(rand.Float64()*windowWidth, rand.Float64()*windowHeight),
+		vel:           pixel.V(rand.Float64()*2-1, rand.Float64()*2-1).Unit().Scaled(genome.speed),
+		genome:        genome,
+		species:       species,
+		tailAngle:     0,
+		consumedFood:  0, // Initialize this field
+		timeSinceLast: 0, // Initialize this field
+	}
 }
 
-// Draw draws the particle
-func (p *Particle) Draw(imd *imdraw.IMDraw) {
-	imd.Color = p.gene
+// Update updates the position of the axol
+func (a *Axol) Update(dt float64, foods []Food) {
+	a.pos = a.pos.Add(a.vel.Scaled(dt))
+	if a.pos.X < 0 || a.pos.X > windowWidth {
+		a.vel.X = -a.vel.X
+	}
+	if a.pos.Y < 0 || a.pos.Y > windowHeight {
+		a.vel.Y = -a.vel.Y
+	}
+	a.tailAngle += 6 * dt // Reduced from 10 to 6 to slow down the animation
+	a.timeSinceLast += dt
 
-	// Draw the main body
-	imd.Push(p.pos)
-	imd.Circle(p.radius, 0)
+	// Consume food if within range
+	for _, food := range foods {
+		if a.pos.To(food.pos).Len() <= consumeRadius {
+			a.consumeFood(food)
+			break
+		}
+	}
+}
 
-	// Draw the nucleus
-	imd.Color = colornames.Yellow
-	imd.Push(p.nucleusPos)
-	imd.Circle(nucleusRadius, 0)
+// Draw draws the axol
+func (a *Axol) Draw(imd *imdraw.IMDraw) {
+	// Draw translucent body
+	imd.Color = a.genome.color
+	imd.Push(a.pos)
+	imd.Circle(a.genome.size, 0)
+
+	// Draw nucleus
+	nucleusColor := color.RGBA{R: 255, G: 255, B: 255, A: 200}
+	imd.Color = nucleusColor
+	imd.Push(a.pos)
+	imd.Circle(a.genome.size/3, 0)
+
+	// Draw wiggling tail
+	tailLength := a.genome.size * 3 // Reduced from 4 to 3
+	tailSegments := 20
+	waveFrequency := 2.0
+	maxAmplitude := a.genome.size * 0.25 // Reduced from 0.3 to 0.25
+
+	imd.Color = a.genome.color
+	for i := 0; i <= tailSegments; i++ {
+		t := float64(i) / float64(tailSegments)
+		segmentPos := a.pos.Add(a.vel.Unit().Scaled(-t * tailLength))
+
+		// Calculate wiggle offset (reversed t in the sine function)
+		wiggleOffset := math.Sin(a.tailAngle+(1-t)*waveFrequency*math.Pi) * maxAmplitude * t
+
+		// Apply offset perpendicular to tail direction
+		segmentPos = segmentPos.Add(a.vel.Normal().Scaled(wiggleOffset))
+
+		imd.Push(segmentPos)
+	}
+	imd.Line(a.genome.size * 0.2) // Adjust line thickness based on Axol size
 }
 
 // Update the food sources, generating new ones over time
@@ -212,7 +236,7 @@ func NewFood() Food {
 }
 
 // debugDisplay displays debugging information
-func debugDisplay(particles []*Particle, foods []Food, generation int) {
+func debugDisplay(particles []*Axol, foods []Food, generation int) {
 	// Clear the console
 	fmt.Print("\033[H\033[2J")
 
@@ -224,27 +248,27 @@ func debugDisplay(particles []*Particle, foods []Food, generation int) {
 }
 
 // evolvePopulation applies genetic algorithms to evolve the population
-func evolvePopulation(particles []*Particle, foods []Food) []*Particle {
-	for _, p := range particles {
+func evolvePopulation(axols []*Axol, foods []Food) []*Axol {
+	for _, a := range axols {
 		// Speed up evolution based on food consumption
-		if p.consumedFood > 0 {
-			for i := 0; i < p.consumedFood; i++ {
-				p.mutate()
+		if a.consumedFood > 0 {
+			for i := 0; i < a.consumedFood; i++ {
+				a.mutate()
 			}
 		}
 	}
 
-	return particles
+	return axols
 }
 
 // consumeFood consumes a food source and increases nutrition
-func (p *Particle) consumeFood(food Food) {
-	p.consumedFood++
-	p.timeSinceLast = 0
+func (a *Axol) consumeFood(food Food) {
+	a.consumedFood++
+	a.timeSinceLast = 0
 }
 
 // mutate applies mutation to the particle's traits
-func (p *Particle) mutate() {
+func (p *Axol) mutate() {
 	// Mutation can be implemented here based on specific requirements
 }
 

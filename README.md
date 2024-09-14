@@ -21,3 +21,7 @@ Axols simulates the life of small creatures in a 2D environment. Each axol has i
 To run Axols, you need to have Go installed on your system. You can download and install Go from the [official Go website](https://golang.org/).
 
 You'll also need to install the Pixel game library and its dependencies. You can do this by running:
+
+## License
+
+This project is licensed under the Creative Commons Attribution 4.0 International License. To view a copy of this license, visit http://creativecommons.org/licenses/by/4.0/ or send a letter to Creative Commons, PO Box 1866, Mountain View, CA 94042, USA.

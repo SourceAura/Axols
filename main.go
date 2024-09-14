@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"image/color"
 	"math"
 	"math/rand"
+	"sort"
 	"time"
 
 	"github.com/faiface/pixel"
@@ -95,9 +95,21 @@ func run() {
 	deepPurple := color.RGBA{R: 20, G: 0, B: 30, A: 255}
 
 	last := time.Now()
+	generation := 0
+	generationTime := 0.0
+	generationDuration := 10.0 // Duration of each generation in seconds
+
 	for !win.Closed() {
 		dt := time.Since(last).Seconds()
 		last = time.Now()
+
+		generationTime += dt
+		if generationTime >= generationDuration {
+			axols = evolvePopulation(axols, foods)
+			generation++
+			generationTime = 0
+			foods = []Food{} // Reset food for new generation
+		}
 
 		win.Clear(deepPurple)
 		imd.Clear()
@@ -111,6 +123,8 @@ func run() {
 		// Update and draw food sources
 		updateFoodSources(&foods, dt)
 		drawFoodSources(imd, foods)
+
+		updateDebugInfo(axols, foods, generation) // Update debug info
 
 		imd.Draw(win)
 		win.Update()
@@ -158,6 +172,16 @@ func (a *Axol) Update(dt float64, foods []Food) {
 	}
 	a.tailAngle += 6 * dt // Reduced from 10 to 6 to slow down the animation
 	a.timeSinceLast += dt
+
+	// Seek nearest food source
+	nearestFood := a.findNearestFood(foods)
+	if nearestFood != nil && a.pos.To(nearestFood.pos).Len() <= a.genome.senseRadius {
+		direction := nearestFood.pos.Sub(a.pos).Unit()
+		a.vel = a.vel.Add(direction.Scaled(dt * a.genome.speed)).Unit().Scaled(a.genome.speed)
+	} else {
+		// Random movement if no food is nearby
+		a.vel = a.vel.Add(pixel.V(rand.Float64()*2-1, rand.Float64()*2-1).Scaled(dt * a.genome.speed)).Unit().Scaled(a.genome.speed)
+	}
 
 	// Consume food if within range
 	for _, food := range foods {
@@ -235,32 +259,6 @@ func NewFood() Food {
 	return Food{pos, radius, color, biome, nutrition}
 }
 
-// debugDisplay displays debugging information
-func debugDisplay(particles []*Axol, foods []Food, generation int) {
-	// Clear the console
-	fmt.Print("\033[H\033[2J")
-
-	// Print debugging information
-	fmt.Println("Generation:", generation)
-	fmt.Println("Number of particles:", len(particles))
-	fmt.Println("Number of food sources:", len(foods))
-	// Add more relevant debugging information here
-}
-
-// evolvePopulation applies genetic algorithms to evolve the population
-func evolvePopulation(axols []*Axol, foods []Food) []*Axol {
-	for _, a := range axols {
-		// Speed up evolution based on food consumption
-		if a.consumedFood > 0 {
-			for i := 0; i < a.consumedFood; i++ {
-				a.mutate()
-			}
-		}
-	}
-
-	return axols
-}
-
 // consumeFood consumes a food source and increases nutrition
 func (a *Axol) consumeFood(food Food) {
 	a.consumedFood++
@@ -269,7 +267,21 @@ func (a *Axol) consumeFood(food Food) {
 
 // mutate applies mutation to the particle's traits
 func (p *Axol) mutate() {
-	// Mutation can be implemented here based on specific requirements
+	if rand.Float64() < mutationRate {
+		p.genome.size *= 1 + (rand.Float64()*0.2 - 0.1)
+		p.genome.speed *= 1 + (rand.Float64()*0.2 - 0.1)
+		p.genome.senseRadius *= 1 + (rand.Float64()*0.2 - 0.1)
+		p.genome.color = mutateColor(p.genome.color)
+	}
+}
+
+func mutateColor(c color.RGBA) color.RGBA {
+	return color.RGBA{
+		R: uint8(math.Max(0, math.Min(255, float64(c.R)+rand.Float64()*20-10))),
+		G: uint8(math.Max(0, math.Min(255, float64(c.G)+rand.Float64()*20-10))),
+		B: uint8(math.Max(0, math.Min(255, float64(c.B)+rand.Float64()*20-10))),
+		A: c.A,
+	}
 }
 
 // randomColor generates a random color
@@ -282,7 +294,62 @@ func randomColor() color.RGBA {
 	}
 }
 
+func (a *Axol) findNearestFood(foods []Food) *Food {
+	var nearest *Food
+	minDist := math.Inf(1)
+	for i := range foods {
+		dist := a.pos.To(foods[i].pos).Len()
+		if dist < minDist {
+			minDist = dist
+			nearest = &foods[i]
+		}
+	}
+	return nearest
+}
+
+func evolvePopulation(axols []*Axol, foods []Food) []*Axol {
+	// Sort axols by fitness (consumed food)
+	sort.Slice(axols, func(i, j int) bool {
+		return axols[i].consumedFood > axols[j].consumedFood
+	})
+
+	// Keep top 50% and reproduce
+	survivors := len(axols) / 2
+	for i := survivors; i < len(axols); i++ {
+		parent1 := axols[rand.Intn(survivors)]
+		parent2 := axols[rand.Intn(survivors)]
+		axols[i] = crossover(parent1, parent2)
+		axols[i].mutate()
+	}
+
+	// Reset consumed food for next generation
+	for _, a := range axols {
+		a.consumedFood = 0
+	}
+
+	return axols
+}
+
+func crossover(parent1, parent2 *Axol) *Axol {
+	child := NewAxol(parent1.species)
+	child.genome.size = (parent1.genome.size + parent2.genome.size) / 2
+	child.genome.speed = (parent1.genome.speed + parent2.genome.speed) / 2
+	child.genome.senseRadius = (parent1.genome.senseRadius + parent2.genome.senseRadius) / 2
+	child.genome.color = averageColor(parent1.genome.color, parent2.genome.color)
+	return child
+}
+
+func averageColor(c1, c2 color.RGBA) color.RGBA {
+	return color.RGBA{
+		R: uint8((int(c1.R) + int(c2.R)) / 2),
+		G: uint8((int(c1.G) + int(c2.G)) / 2),
+		B: uint8((int(c1.B) + int(c2.B)) / 2),
+		A: uint8((int(c1.A) + int(c2.A)) / 2),
+	}
+}
+
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	pixelgl.Run(run)
+	startDebugDisplay() // Start the debug display goroutine
+	run()
 }

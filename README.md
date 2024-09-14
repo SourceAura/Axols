@@ -4,17 +4,27 @@ Axols is an evolution simulation implemented in Go using the Pixel game library.
 
 ## Overview
 
-Axols simulates the life of small creatures in a 2D environment. Each axol has its own set of properties such as position, velocity, size, speed, and genetic makeup. The simulation includes features like creature movement, food sources, and evolutionary algorithms for trait selection.
+Axols simulates the life of small creatures in a 2D environment. Each axol has its own set of properties such as position, velocity, size, speed, sense radius, and genetic makeup. The simulation includes features like creature movement, food sources, and evolutionary algorithms for trait selection.
 
 ## Features
 
-- Axol life simulation with two distinct species
-- Random generation of axol properties
-- Axol movement with boundary collision detection
-- Food sources that axols can consume
-- Evolutionary algorithms for trait selection over time
+- Two distinct species of axols with different initial properties
+- Random generation of axol properties and food sources
+- Axol movement with boundary collision detection and food-seeking behavior
+- Food sources that axols can consume for nutrition
+- Evolutionary algorithms for trait selection over generations
+- Mutation of axol properties (size, speed, sense radius, and color)
+- Visualization of axols with translucent bodies, nuclei, and wiggling tails
 - Multiple biomes (currently not fully implemented)
-- Visualization of axols with bodies, nuclei, and wiggling tails
+- Debug display for simulation statistics (not shown in the provided code)
+
+## Simulation Details
+
+- The simulation runs in generations, with each generation lasting 10 seconds
+- Axols seek and consume food within their sense radius
+- At the end of each generation, the population evolves based on food consumption
+- The top 50% of axols survive and reproduce, creating offspring with mixed traits
+- Mutation can occur during reproduction, slightly altering axol properties
 
 ## Requirements
 

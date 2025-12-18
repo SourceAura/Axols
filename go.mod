@@ -1,4 +1,4 @@
-module evo-siim
+module axols
 
 go 1.22.0
 

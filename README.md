@@ -26,6 +26,25 @@ Axols simulates the life of small creatures in a 2D environment. Each axol has i
 - The top 50% of axols survive and reproduce, creating offspring with mixed traits
 - Mutation can occur during reproduction, slightly altering axol properties
 
+## Axolotl Details
+
+Axolotls are native to only one place in the world: the Xochimilco lake complex (including canals and wetlands) near Mexico City, Mexico, where they are critically endangered due to pollution and habitat loss, though they are also found globally as pets and in labs. They are fully aquatic amphibians that live their entire lives in freshwater, hiding in mud or aquatic plants during the day and becoming active at night.  
+Key Habitat Details:
+
+    Location: Lake Xochimilco and its connected canals in Mexico City. 
+
+Environment: Still, freshwater lakes and wetlands with abundant aquatic vegetation. 
+Threats: Pollution, habitat degradation, and invasive species have severely reduced their wild numbers. 
+
+
+What They Do:
+
+    They are "lentic" creatures, meaning they live in still water. 
+
+They use their feathery external gills to breathe underwater and hide among plants or burrow in the mud. 
+They are carnivores, using a vacuum-like sucking motion to eat small fish, insects, and crustaceans. 
+
+
 ## Requirements
 
 To run Axols, you need to have Go installed on your system. You can download and install Go from the [official Go website](https://golang.org/).

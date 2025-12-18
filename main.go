@@ -124,7 +124,7 @@ func run() {
 		updateFoodSources(&foods, dt)
 		drawFoodSources(imd, foods)
 
-		updateDebugInfo(axols, foods, generation) // Update debug info
+		// updateDebugInfo(axols, foods, generation) // Update debug info
 
 		imd.Draw(win)
 		win.Update()
@@ -351,5 +351,18 @@ func averageColor(c1, c2 color.RGBA) color.RGBA {
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	startDebugDisplay() // Start the debug display goroutine
-	run()
+	pixelgl.Run(run)
+}
+
+// startDebugDisplay prints simulation debug info periodically in a separate goroutine.
+// This is a minimal implementation that prints a message every few seconds.
+func startDebugDisplay() {
+	go func() {
+		for {
+			time.Sleep(5 * time.Second)
+			// In a real implementation, you would print actual simulation stats here.
+			// For now, just print a placeholder message.
+			println("[DEBUG] Simulation running... (implement stats display as needed)")
+		}
+	}()
 }
